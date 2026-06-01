@@ -22,8 +22,19 @@ LANGFUSE_SECRET_KEY = os.getenv("LANGFUSE_SECRET_KEY")
 BACKEND_API_ENDPOINT = os.getenv("BACKEND_API_ENDPOINT", "http://localhost:8000")
 UI_APP_URL = os.getenv("UI_APP_URL", "http://localhost:3010")
 
-DATABASE_URL = os.environ["DATABASE_URL"]
-REDIS_URL = os.environ["REDIS_URL"]
+def _required_env(name: str) -> str:
+    value = os.getenv(name)
+    if value:
+        return value
+    raise RuntimeError(
+        f"Missing required environment variable {name}. "
+        "Set it in the deployment runtime environment. In Coolify, do not rely "
+        "only on build-time variables."
+    )
+
+
+DATABASE_URL = _required_env("DATABASE_URL")
+REDIS_URL = _required_env("REDIS_URL")
 
 DEPLOYMENT_MODE = os.getenv("DEPLOYMENT_MODE", "oss")
 AUTH_PROVIDER = os.getenv("AUTH_PROVIDER", "local")

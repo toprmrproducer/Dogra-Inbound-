@@ -24,13 +24,78 @@ if [[ -f "$ENV_FILE" ]]; then
 fi
 
 ###############################################################################
-### 2) Run migrations
+### 2) Normalize deployment environment
+###############################################################################
+
+first_non_empty() {
+  local value
+  for value in "$@"; do
+    if [[ -n "${value:-}" ]]; then
+      printf '%s' "$value"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Coolify and managed providers often expose equivalent values under different
+# names. Normalize them before importing Python modules that read env at import.
+export DATABASE_URL="${DATABASE_URL:-$(first_non_empty "${POSTGRES_URL:-}" "${DATABASE_PRIVATE_URL:-}" "${SUPABASE_DATABASE_URL:-}" "${SUPABASE_DB_URL:-}" || true)}"
+
+if [[ -z "${DATABASE_URL:-}" && -n "${SUPABASE_URL:-}" ]]; then
+  SUPABASE_DB_PASSWORD_VALUE="$(first_non_empty "${SUPABASE_DB_PASSWORD:-}" "${SUPABASE_DATABASE_PASSWORD:-}" "${SUPABASE_PASSWORD:-}" "${POSTGRES_PASSWORD:-}" || true)"
+  if [[ -n "$SUPABASE_DB_PASSWORD_VALUE" ]]; then
+    export DATABASE_URL="$(
+      SUPABASE_URL="$SUPABASE_URL" SUPABASE_DB_PASSWORD="$SUPABASE_DB_PASSWORD_VALUE" python - <<'PY'
+from urllib.parse import quote, urlparse
+import os
+
+host = urlparse(os.environ["SUPABASE_URL"]).hostname or ""
+project_ref = host.split(".")[0]
+password = quote(os.environ["SUPABASE_DB_PASSWORD"], safe="")
+print(f"postgresql+asyncpg://postgres:{password}@db.{project_ref}.supabase.co:5432/postgres")
+PY
+    )"
+  fi
+fi
+
+export REDIS_URL="${REDIS_URL:-$(first_non_empty "${REDIS_PRIVATE_URL:-}" "${COOLIFY_REDIS_URL:-}" "${UPSTASH_REDIS_URL:-}" || true)}"
+
+# Supabase S3 aliases used by the RapidXAI bridge env.
+export AWS_ENDPOINT_URL="${AWS_ENDPOINT_URL:-${SUPABASE_S3_ENDPOINT:-}}"
+export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-${SUPABASE_S3_ACCESS_KEY_ID:-}}"
+export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-${SUPABASE_S3_SECRET_ACCESS_KEY:-}}"
+export S3_REGION="${S3_REGION:-${SUPABASE_S3_REGION:-us-east-1}}"
+export S3_BUCKET="${S3_BUCKET:-${SUPABASE_S3_BUCKET:-}}"
+if [[ -n "${AWS_ENDPOINT_URL:-}" && -n "${S3_BUCKET:-}" ]]; then
+  export ENABLE_AWS_S3="${ENABLE_AWS_S3:-true}"
+fi
+
+missing_env=()
+[[ -n "${DATABASE_URL:-}" ]] || missing_env+=("DATABASE_URL")
+[[ -n "${REDIS_URL:-}" ]] || missing_env+=("REDIS_URL")
+if [[ "${ENABLE_AWS_S3:-false}" == "true" ]]; then
+  [[ -n "${AWS_ACCESS_KEY_ID:-}" ]] || missing_env+=("AWS_ACCESS_KEY_ID")
+  [[ -n "${AWS_SECRET_ACCESS_KEY:-}" ]] || missing_env+=("AWS_SECRET_ACCESS_KEY")
+  [[ -n "${S3_BUCKET:-}" ]] || missing_env+=("S3_BUCKET")
+fi
+
+if (( ${#missing_env[@]} > 0 )); then
+  echo "ERROR: Missing required runtime environment variable(s): ${missing_env[*]}" >&2
+  echo "Set them in Coolify runtime environment variables, not only build arguments." >&2
+  echo "Supported aliases: POSTGRES_URL/DATABASE_PRIVATE_URL/SUPABASE_DATABASE_URL for DATABASE_URL; REDIS_PRIVATE_URL/COOLIFY_REDIS_URL/UPSTASH_REDIS_URL for REDIS_URL." >&2
+  echo "Supabase Postgres can also be derived from SUPABASE_URL + SUPABASE_DB_PASSWORD." >&2
+  exit 78
+fi
+
+###############################################################################
+### 3) Run migrations
 ###############################################################################
 
 alembic -c "$BASE_DIR/api/alembic.ini" upgrade head
 
 ###############################################################################
-### 3) Signal handling — forward TERM/INT to children for clean docker stop
+### 4) Signal handling — forward TERM/INT to children for clean docker stop
 ###############################################################################
 
 pids=()
@@ -56,7 +121,7 @@ start() {
 }
 
 ###############################################################################
-### 4) Start services (logs go to stdout for `docker logs`)
+### 5) Start services (logs go to stdout for `docker logs`)
 ###############################################################################
 
 start ari_manager           python -m api.services.telephony.ari_manager
@@ -77,7 +142,7 @@ for ((i=1; i<=ARQ_WORKERS; i++)); do
 done
 
 ###############################################################################
-### 5) Wait — if any service exits, tear the container down so docker restarts
+### 6) Wait — if any service exits, tear the container down so docker restarts
 ###############################################################################
 
 wait -n
