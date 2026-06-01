@@ -1,27 +1,4 @@
 services:
-  postgres:
-    image: pgvector/pgvector:pg17
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: postgres
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 3s
-      timeout: 3s
-      retries: 10
-    networks:
-      - app-network
-
   redis:
     image: redis:7
     ports:
@@ -35,27 +12,6 @@ services:
       interval: 3s
       timeout: 10s
       retries: 10
-    networks:
-      - app-network
-
-  minio:
-    image: minio/minio
-    container_name: minio
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-      MINIO_API_CORS_ALLOW_ORIGIN: "*"
-    ports:
-      - "127.0.0.1:9000:9000" # Bind to localhost explicitly
-      - "127.0.0.1:9001:9001"
-    volumes:
-      - minio-data:/data
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
     networks:
       - app-network
 
@@ -135,25 +91,19 @@ services:
       # domain to host the stack
       BACKEND_API_ENDPOINT: "${BACKEND_API_ENDPOINT:-http://localhost:8000}"
 
-      # Database configuration (using containerized postgres)
-      DATABASE_URL: "postgresql+asyncpg://postgres:postgres@postgres:5432/postgres"
+      # Database configuration (Supabase Postgres)
+      DATABASE_URL: "${DATABASE_URL}"
 
       # Redis configuration (using containerized redis)
       REDIS_URL: "redis://:redissecret@redis:6379"
 
-      # Storage configuration - using local MinIO
-      ENABLE_AWS_S3: "false"
-
-      # MinIO
-      MINIO_ENDPOINT: "minio:9000"
-      # Full URL (with scheme) browsers use to reach MinIO. For remote
-      # deployments behind HTTPS, set MINIO_PUBLIC_ENDPOINT in .env to
-      # e.g. https://your-server.example.com (nginx proxies /voice-audio/).
-      MINIO_PUBLIC_ENDPOINT: "${MINIO_PUBLIC_ENDPOINT:-http://localhost:9000}"
-      MINIO_ACCESS_KEY: "minioadmin"
-      MINIO_SECRET_KEY: "minioadmin"
-      MINIO_BUCKET: "voice-audio"
-      MINIO_SECURE: "false"
+      # Storage configuration - Supabase S3
+      ENABLE_AWS_S3: "true"
+      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID}"
+      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY}"
+      AWS_ENDPOINT_URL: "https://thdouqkqrvqbzfsgnkqx.supabase.co/storage/v1/s3"
+      S3_BUCKET: "voice-audio"
+      S3_REGION: "ap-northeast-1"
 
       # Number of uvicorn worker processes (each is its own process bound to a
       # distinct port starting at 8000). dograh-init renders nginx upstreams
@@ -183,11 +133,7 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
-        condition: service_healthy
-      minio:
         condition: service_healthy
       cloudflared:
         condition: service_started
@@ -244,10 +190,7 @@ services:
       - app-network
 
 volumes:
-  postgres_data:
   redis_data:
-  minio-data:
-    driver: local
   shared-tmp:
     driver: local
   nginx-generated:

@@ -11,6 +11,20 @@ import { getAuthProvider } from '@/lib/auth/config';
 const OSS_TOKEN_COOKIE = 'dograh_auth_token';
 const OSS_USER_COOKIE = 'dograh_auth_user';
 
+async function clearSessionCookies() {
+  const cookieStore = await cookies();
+  const cookieOptions = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax' as const,
+    maxAge: 0,
+    path: '/',
+  };
+
+  cookieStore.set(OSS_TOKEN_COOKIE, '', cookieOptions);
+  cookieStore.set(OSS_USER_COOKIE, '', cookieOptions);
+}
+
 export async function GET() {
   const authProvider = await getAuthProvider();
 
@@ -26,6 +40,27 @@ export async function GET() {
   // If no token exists, return 401 (user needs to sign up or log in)
   if (!token) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  }
+
+  const backendUrl = process.env.BACKEND_URL || 'http://api:8000';
+  try {
+    const validationResponse = await fetch(`${backendUrl}/api/v1/auth/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+    });
+
+    if (!validationResponse.ok) {
+      await clearSessionCookies();
+      return NextResponse.json(
+        { error: 'Session expired. Please sign in again.' },
+        { status: 401 },
+      );
+    }
+  } catch {
+    return NextResponse.json(
+      { error: 'Unable to validate authentication session' },
+      { status: 503 },
+    );
   }
 
   // Return the auth info as JSON

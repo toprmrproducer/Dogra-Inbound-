@@ -1,6 +1,7 @@
 from loguru import logger
 
 from api.constants import (
+    AWS_ENDPOINT_URL,
     ENABLE_AWS_S3,
     ENVIRONMENT,
     MINIO_ACCESS_KEY,
@@ -56,8 +57,9 @@ def get_storage_for_backend(backend: str) -> BaseFileSystem:
         region = S3_REGION
         logger.info(
             f"Initializing {backend} storage with bucket '{bucket}' in region '{region}'"
+            + (f" endpoint={AWS_ENDPOINT_URL}" if AWS_ENDPOINT_URL else "")
         )
-        return S3FileSystem(bucket, region)
+        return S3FileSystem(bucket, region, endpoint_url=AWS_ENDPOINT_URL)
 
     # Future backend implementations can be added here:
     # elif backend == StorageBackend.GCS:  # Code 3

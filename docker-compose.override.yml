@@ -1,0 +1,29 @@
+services:
+  api:
+    environment:
+      ENABLE_AWS_S3: "false"
+      MINIO_ENDPOINT: "minio:9000"
+      MINIO_PUBLIC_ENDPOINT: "http://localhost:9000"
+      MINIO_ACCESS_KEY: "minioadmin"
+      MINIO_SECRET_KEY: "minioadmin"
+      MINIO_BUCKET: "voice-audio"
+      MINIO_SECURE: "false"
+    volumes:
+      - ./api:/app/api
+  ui:
+    build:
+      context: .
+      dockerfile: ui/Dockerfile
+    image: rapidxai-ui-local:latest
+    environment:
+      HOSTNAME: "0.0.0.0"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget --no-verbose --tries=1 --spider http://127.0.0.1:3010/auth/login || exit 1",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s

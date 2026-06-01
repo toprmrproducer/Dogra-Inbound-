@@ -1,11 +1,23 @@
 "use client";
 
 import Link from 'next/link';
+import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 import { GitHubStarBadge } from '@/components/layout/GitHubStarBadge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/lib/auth';
+
+const COST_PER_MINUTE_INR = 6;
+
+const costProjection = [
+    { minute: 1, cost: COST_PER_MINUTE_INR * 1 },
+    { minute: 2, cost: COST_PER_MINUTE_INR * 2 },
+    { minute: 3, cost: COST_PER_MINUTE_INR * 3 },
+    { minute: 4, cost: COST_PER_MINUTE_INR * 4 },
+    { minute: 5, cost: COST_PER_MINUTE_INR * 5 },
+    { minute: 10, cost: COST_PER_MINUTE_INR * 10 },
+];
 
 export default function OverviewPage() {
     const { user, provider } = useAuth();
@@ -19,7 +31,7 @@ export default function OverviewPage() {
                     <CardHeader>
                         <CardTitle className="text-3xl">
                             {isOSSMode ? (
-                                "Welcome to Dograh"
+                                "Welcome to RapidXAI Solution Platform"
                             ) : (
                                 `Welcome${user?.displayName ? `, ${user.displayName.split(' ')[0]}` : ''}!`
                             )}
@@ -27,7 +39,7 @@ export default function OverviewPage() {
                         <CardDescription className="text-lg mt-2">
                             {isOSSMode ? (
                                 <>
-                                    Open source alternative to Vapi. Help us support the project by giving us a star on GitHub.
+                                    Build and run inbound/outbound voice agents with realtime AI, telephony integrations, and tool orchestration.
                                 </>
                             ) : (
                                 "Get started with building voice AI workflows"
@@ -78,12 +90,68 @@ export default function OverviewPage() {
                     </Card>
                 </div>
 
+                {/* Cost Tracking */}
+                <Card className="mt-8">
+                    <CardHeader>
+                        <CardTitle>Call Cost Tracking (INR)</CardTitle>
+                        <CardDescription>
+                            Fixed runtime estimate: ₹{COST_PER_MINUTE_INR} per minute of call duration.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="h-64 w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <LineChart data={costProjection} margin={{ left: 12, right: 12, top: 8, bottom: 8 }}>
+                                    <XAxis dataKey="minute" tickFormatter={(v) => `${v}m`} />
+                                    <YAxis tickFormatter={(v) => `₹${v}`} />
+                                    <Tooltip formatter={(value: number) => [`₹${value}`, 'Estimated Cost']} labelFormatter={(label) => `Minute ${label}`} />
+                                    <Line type="monotone" dataKey="cost" stroke="hsl(var(--primary))" strokeWidth={2} dot />
+                                </LineChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* Ops Shortcuts */}
+                <Card className="mt-8">
+                    <CardHeader>
+                        <CardTitle>RapidXAI Operations</CardTitle>
+                        <CardDescription>
+                            Track tool calls, run tests, configure realtime models, and monitor run outcomes.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="flex flex-wrap gap-4">
+                            <Button asChild variant="outline">
+                                <Link href="/tools">
+                                    Manage Tools
+                                </Link>
+                            </Button>
+                            <Button asChild variant="outline">
+                                <Link href="/usage">
+                                    Track Agent Runs
+                                </Link>
+                            </Button>
+                            <Button asChild variant="outline">
+                                <Link href="/model-configurations">
+                                    Realtime Model Setup
+                                </Link>
+                            </Button>
+                            <Button asChild variant="outline">
+                                <Link href="/telephony-configurations">
+                                    Telephony + Test Calls
+                                </Link>
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
+
                 {/* Resources Section */}
                 <Card className="mt-8">
                     <CardHeader>
                         <CardTitle>Resources</CardTitle>
                         <CardDescription>
-                            Get help and learn more about Dograh
+                            Get help and learn more about RapidXAI and Dograh
                         </CardDescription>
                     </CardHeader>
                     <CardContent>

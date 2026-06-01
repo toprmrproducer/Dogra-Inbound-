@@ -19,6 +19,7 @@ export const createClientConfig: CreateClientConfig = (config) => {
 };
 
 let interceptorRegistered = false;
+let authRedirectInProgress = false;
 
 /**
  * Register a request interceptor that attaches a fresh access token
@@ -39,5 +40,33 @@ export function setupAuthInterceptor(apiClient: Client, getAccessToken: () => Pr
             // If token retrieval fails, let the request proceed without auth
         }
         return request;
+    });
+
+    apiClient.interceptors.error.use(async (error, response) => {
+        if (
+            typeof window !== 'undefined' &&
+            response?.status === 401 &&
+            !authRedirectInProgress &&
+            !window.location.pathname.startsWith('/auth/')
+        ) {
+            const detail = typeof error === 'object' && error !== null && 'detail' in error
+                ? String((error as { detail?: unknown }).detail)
+                : '';
+
+            if (
+                detail.includes('Invalid or expired token') ||
+                detail.includes('Authorization header required') ||
+                detail.includes('Unauthorized')
+            ) {
+                authRedirectInProgress = true;
+                try {
+                    await fetch('/api/auth/logout', { method: 'POST' });
+                } finally {
+                    window.location.href = '/auth/login?expired=1';
+                }
+            }
+        }
+
+        return error;
     });
 }

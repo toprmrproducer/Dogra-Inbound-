@@ -1,0 +1,113 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
+      POSTGRES_DB: postgres
+    volumes:
+      - rapidxai_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - rapidxai
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-change_me}"]
+    volumes:
+      - rapidxai_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-change_me}", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - rapidxai
+
+  minio:
+    image: minio/minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
+      MINIO_API_CORS_ALLOW_ORIGIN: "*"
+    volumes:
+      - rapidxai_minio:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - rapidxai
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    image: rapidxai-api:latest
+    restart: unless-stopped
+    environment:
+      ENVIRONMENT: production
+      LOG_LEVEL: INFO
+      BACKEND_API_ENDPOINT: ${BACKEND_API_ENDPOINT:-http://localhost:8000}
+      DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD:-change_me}@postgres:5432/postgres
+      REDIS_URL: redis://:${REDIS_PASSWORD:-change_me}@redis:6379
+      DEPLOYMENT_MODE: oss
+      AUTH_PROVIDER: local
+      OSS_JWT_SECRET: ${OSS_JWT_SECRET:-change_me}
+      ENABLE_AWS_S3: "false"
+      MINIO_ENDPOINT: minio:9000
+      MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-http://localhost:9000}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      MINIO_BUCKET: ${MINIO_BUCKET:-voice-audio}
+      MINIO_SECURE: "false"
+      ENABLE_TELEMETRY: "false"
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - rapidxai
+
+  ui:
+    build:
+      context: .
+      dockerfile: ui/Dockerfile
+    image: rapidxai-ui:latest
+    restart: unless-stopped
+    environment:
+      BACKEND_URL: http://api:8000
+      NODE_ENV: oss
+      ENABLE_TELEMETRY: "false"
+    ports:
+      - "3010:3010"
+    depends_on:
+      - api
+    networks:
+      - rapidxai
+
+volumes:
+  rapidxai_postgres:
+  rapidxai_redis:
+  rapidxai_minio:
+
+networks:
+  rapidxai:
+    driver: bridge

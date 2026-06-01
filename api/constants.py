@@ -44,6 +44,7 @@ MINIO_SECURE = os.getenv("MINIO_SECURE", "false").lower() == "true"
 # AWS S3 Configuration
 S3_BUCKET = os.environ.get("S3_BUCKET")
 S3_REGION = os.environ.get("S3_REGION", "us-east-1")
+AWS_ENDPOINT_URL = os.environ.get("AWS_ENDPOINT_URL")
 
 # Sentry configuration
 SENTRY_DSN = os.getenv("SENTRY_DSN")

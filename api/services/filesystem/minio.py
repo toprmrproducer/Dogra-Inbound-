@@ -1,5 +1,7 @@
 import asyncio
 import json
+import inspect
+from io import BytesIO
 from typing import Any, BinaryIO, Dict, Optional
 
 from loguru import logger
@@ -91,13 +93,15 @@ class MinioFileSystem(BaseFileSystem):
 
     async def acreate_file(self, file_path: str, content: BinaryIO) -> bool:
         try:
-            data = await content.read()
+            maybe_data = content.read()
+            data = await maybe_data if inspect.isawaitable(maybe_data) else maybe_data
 
             def _put():
+                body = BytesIO(bytes(data))
                 self.client.put_object(
                     self.bucket_name,
                     file_path,
-                    data=bytes(data),
+                    data=body,
                     length=len(data),
                 )
 
